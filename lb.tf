@@ -1,3 +1,11 @@
+variable canary_company_ids {
+    type    = list(string)
+    default = []
+    validation {
+        condition = can([for id in var.canary_company_ids : regex("^[a-zA-Z0-9_-]+$", id)])
+        error_message = "Company IDs can contain only alphanumeric characters, underscores, and hyphens."
+    }
+}
 
 data "aws_vpc" "default" {
   default = true
@@ -77,12 +85,25 @@ resource "aws_lb_listener" "minimal-lb-listener" {
     forward {
       target_group {
         arn    = aws_lb_target_group.prod-tg.arn
-        weight = 90
+        weight = 100
       }
-      target_group {
-        arn    = aws_lb_target_group.canary-tg.arn
-        weight = 10
-      }
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "canary" {
+  listener_arn = aws_lb_listener.minimal-lb-listener.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.canary-tg.arn
+  }
+
+  condition {
+    http_header {
+      http_header_name = "x-company-id"
+      values           = var.canary_company_ids
     }
   }
 }
